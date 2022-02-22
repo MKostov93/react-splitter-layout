@@ -21,6 +21,7 @@ function clearSelection() {
 }
 
 const DEFAULT_SPLITTER_SIZE = 4;
+const DEFAULT_SPLITTER_STEP = 20;
 
 class SplitterLayout extends React.Component {
   constructor(props) {
@@ -30,6 +31,7 @@ class SplitterLayout extends React.Component {
     this.handleMouseUp = this.handleMouseUp.bind(this);
     this.handleTouchMove = this.handleTouchMove.bind(this);
     this.handleSplitterMouseDown = this.handleSplitterMouseDown.bind(this);
+    this.handleKeyDown = this.handleKeyDown.bind(this);
     this.state = {
       secondaryPaneSize: 0,
       resizing: false
@@ -169,6 +171,28 @@ class SplitterLayout extends React.Component {
     this.setState(prevState => (prevState.resizing ? { resizing: false } : null));
   }
 
+  handleKeyDown(event) {
+    const containerRect = this.container.getBoundingClientRect();
+    const splitterRect = this.splitter.getBoundingClientRect();
+    const shouldMoveHorizontally = !this.props.vertical && (event.key === 'ArrowRight' || event.key === 'ArrowLeft');
+    const shouldMoveVertically = this.props.vertical && (event.key === 'ArrowUp' || event.key === 'ArrowDown');
+    const secondaryPanePositions = {
+      ArrowUp: Math.max(splitterRect.top - DEFAULT_SPLITTER_STEP, 0),
+      ArrowRight: Math.min(splitterRect.left + DEFAULT_SPLITTER_STEP, containerRect.width + containerRect.left),
+      ArrowDown: Math.min(splitterRect.top + DEFAULT_SPLITTER_STEP, containerRect.height + containerRect.top),
+      ArrowLeft: Math.max(splitterRect.left - DEFAULT_SPLITTER_STEP, 0)
+    };
+    const secondaryPaneSize = this.getSecondaryPaneSize(containerRect, splitterRect, {
+      left: shouldMoveHorizontally ? secondaryPanePositions[event.key] : splitterRect.left,
+      top: shouldMoveVertically ? secondaryPanePositions[event.key] : splitterRect.top
+    }, false);
+    clearSelection();
+    this.setState(prevState => ({
+      secondaryPaneSize,
+      resizing: (shouldMoveHorizontally || shouldMoveVertically) && prevState.secondaryPaneSize !== secondaryPaneSize
+    }));
+  }
+
   render() {
     let containerClasses = 'splitter-layout';
     if (this.props.customClassName) {
@@ -200,18 +224,26 @@ class SplitterLayout extends React.Component {
         </Pane>
       );
     }
-
+    const currentPosInPercentile = this.container ? Math.round(100 - ((this.state.secondaryPaneSize / this.container.clientWidth) * 100)) : 0;
     return (
       <div className={containerClasses} ref={(c) => { this.container = c; }}>
         {wrappedChildren[0]}
         {wrappedChildren.length > 1 &&
           (
+            // eslint-disable-next-line jsx-a11y/role-supports-aria-props
             <div
+              tabIndex="0" // eslint-disable-line jsx-a11y/no-noninteractive-tabindex
               role="separator"
+              aria-orientation={this.props.vertical ? 'horizontal' : 'vertical'}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={currentPosInPercentile}
               className="layout-splitter"
               ref={(c) => { this.splitter = c; }}
               onMouseDown={this.handleSplitterMouseDown}
               onTouchStart={this.handleSplitterMouseDown}
+              onKeyDown={this.handleKeyDown}
+              onKeyUp={this.handleMouseUp}
             />
           )
         }
